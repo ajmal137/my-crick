@@ -1675,13 +1675,15 @@ function renderGlobalStats() {
 
   const totalMatches = matches.length;
   const totalRuns = matches.reduce((s, m) => {
-    return s + (m.innings[0]?.runs || 0) + (m.innings[1]?.runs || 0);
+    return s + (m.innings?.[0]?.runs || 0) + (m.innings?.[1]?.runs || 0);
   }, 0);
   const totalSixes = matches.reduce((s, m) => {
-    return s + m.innings.reduce((ss, inn) => ss + inn.battingPlayers.reduce((x, p) => x + p.sixes, 0), 0);
+    if (!Array.isArray(m.innings)) return s;
+    return s + m.innings.reduce((ss, inn) => ss + (inn.battingPlayers || []).reduce((x, p) => x + (p.sixes || 0), 0), 0);
   }, 0);
   const totalFours = matches.reduce((s, m) => {
-    return s + m.innings.reduce((ss, inn) => ss + inn.battingPlayers.reduce((x, p) => x + p.fours, 0), 0);
+    if (!Array.isArray(m.innings)) return s;
+    return s + m.innings.reduce((ss, inn) => ss + (inn.battingPlayers || []).reduce((x, p) => x + (p.fours || 0), 0), 0);
   }, 0);
 
   container.innerHTML = `
@@ -1714,8 +1716,8 @@ function renderHistoryScreen() {
 }
 
 function buildHistoryCardHTML(m) {
-  const inn0  = m.innings[0];
-  const inn1  = m.innings[1];
+  const inn0  = m.innings ? m.innings[0] : null;
+  const inn1  = m.innings ? m.innings[1] : null;
   const r     = m.result;
   const isT   = r?.winner === 'Tie';
   const badgeClass = isT ? 'badge-tie' : 'badge-win';
@@ -2538,6 +2540,165 @@ function openPlayerProfile(playerName) {
   openModal('player-profile-modal');
 }
 
+
+// ============================================================
+//  DATA BACKUP & SYNC (IMPORT & EXPORT)
+// ============================================================
+let pendingImportData = null;
+
+function exportAppData() {
+  const matches = loadMatches();
+  const players = loadRegisteredPlayers();
+
+  const backup = {
+    app: 'My Crick',
+    version: '2.9.0',
+    exportedAt: new Date().toISOString(),
+    matchCount: matches.length,
+    playerCount: players.length,
+    data: {
+      matches: matches,
+      players: players,
+      config: config
+    }
+  };
+
+  const jsonStr = JSON.stringify(backup, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+
+  const now = new Date();
+  const dateStr = now.toISOString().split('T')[0];
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const filename = 'mycrick_backup_' + dateStr + '_' + hh + mm + '.json';
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  showToast('📤', 'Backup exported: ' + matches.length + ' matches, ' + players.length + ' players');
+}
+
+function handleImportFile(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const parsed = JSON.parse(e.target.result);
+
+      let matches = [];
+      let players = [];
+      let importedConfig = null;
+
+      if (parsed.data) {
+        matches = Array.isArray(parsed.data.matches) ? parsed.data.matches : [];
+        players = Array.isArray(parsed.data.players) ? parsed.data.players : [];
+        importedConfig = parsed.data.config;
+      } else {
+        matches = Array.isArray(parsed.matches) ? parsed.matches : [];
+        players = Array.isArray(parsed.players) ? parsed.players : [];
+        importedConfig = parsed.config;
+      }
+
+      if (matches.length === 0 && players.length === 0) {
+        showToast('⚠️', 'No matches or players found in backup file');
+        event.target.value = '';
+        return;
+      }
+
+      pendingImportData = {
+        matches: matches,
+        players: players,
+        config: importedConfig,
+        filename: file.name,
+        exportedAt: parsed.exportedAt || null
+      };
+
+      const matchesEl = document.getElementById('import-summary-matches');
+      const playersEl = document.getElementById('import-summary-players');
+      const dateEl    = document.getElementById('import-summary-date');
+
+      if (matchesEl) matchesEl.textContent = matches.length + ' Match' + (matches.length === 1 ? '' : 'es');
+      if (playersEl) playersEl.textContent = players.length + ' Player' + (players.length === 1 ? '' : 's');
+      if (dateEl) {
+        dateEl.textContent = parsed.exportedAt
+          ? new Date(parsed.exportedAt).toLocaleDateString()
+          : 'Custom';
+      }
+
+      openModal('import-confirm-modal');
+    } catch (err) {
+      console.error('Import parse error:', err);
+      showToast('❌', 'Invalid JSON backup file');
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function executeImport(mode) {
+  if (!pendingImportData) return;
+
+  const currentMatches = loadMatches();
+  const currentPlayers = loadRegisteredPlayers();
+
+  let finalMatches = [];
+  let finalPlayers = [];
+
+  if (mode === 'replace') {
+    finalMatches = pendingImportData.matches;
+    finalPlayers = pendingImportData.players;
+    if (pendingImportData.config) {
+      config = Object.assign({}, config, pendingImportData.config);
+      save(CFG_KEY, config);
+      applyConfig();
+    }
+  } else {
+    // Merge mode:
+    const existingMatchIds = new Set(currentMatches.map(function(m) {
+      return m.id || (m.date + '_' + m.teams[0] + '_' + m.teams[1]);
+    }));
+    const newMatchesToAdd = pendingImportData.matches.filter(function(m) {
+      const id = m.id || (m.date + '_' + m.teams[0] + '_' + m.teams[1]);
+      return !existingMatchIds.has(id);
+    });
+    finalMatches = currentMatches.concat(newMatchesToAdd);
+
+    const existingPlayerNames = new Set(currentPlayers.map(function(p) {
+      return p.name.trim().toLowerCase();
+    }));
+    const newPlayersToAdd = pendingImportData.players.filter(function(p) {
+      return !existingPlayerNames.has(p.name.trim().toLowerCase());
+    });
+    finalPlayers = currentPlayers.concat(newPlayersToAdd);
+  }
+
+  saveMatches(finalMatches);
+  saveRegisteredPlayers(finalPlayers);
+
+  closeModal('import-confirm-modal');
+
+  const addedMatches = mode === 'replace' ? finalMatches.length : (finalMatches.length - currentMatches.length);
+  const addedPlayers = mode === 'replace' ? finalPlayers.length : (finalPlayers.length - currentPlayers.length);
+
+  showToast('✅', mode === 'replace'
+    ? ('Restored ' + finalMatches.length + ' matches & ' + finalPlayers.length + ' players!')
+    : ('Imported ' + addedMatches + ' new matches & ' + addedPlayers + ' new players!'));
+
+  pendingImportData = null;
+
+  renderHomeScreen();
+  renderHistoryScreen();
+  if (typeof renderPlayerStatsScreen === 'function') renderPlayerStatsScreen();
+}
+
 window.navigate       = navigate;
 window.recordBall     = recordBall;
 window.startSecondInnings = startSecondInnings;
@@ -2561,6 +2722,10 @@ window.quickFillSquad = quickFillSquad;
 window.switchStatsTab = switchStatsTab;
 window.filterPlayerStats = filterPlayerStats;
 window.openPlayerProfile = openPlayerProfile;
+window.exportAppData = exportAppData;
+window.handleImportFile = handleImportFile;
+window.executeImport = executeImport;
+
 window.renderPlayerStatsScreen = renderPlayerStatsScreen;
 
 
