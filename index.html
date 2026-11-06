@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="My Crick – Track, score, and manage your local cricket matches ball-by-ball on any device, even offline." />
+  <meta name="theme-color" content="#00c853" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="My Crick" />
+
+  <title>My Crick – Local Cricket Manager</title>
+
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-512.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="styles.css?v=2.8" />
+</head>
+<body>
+
+<div id="app">
+  <!-- APP HEADER -->
+  <header class="app-header" id="main-header">
+    <div class="header-brand">
+      <div class="brand-icon">🏏</div>
+      <span class="brand-title">My Crick</span>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="btn-settings" title="Settings" aria-label="Settings">⚙️</button>
+    </div>
+  </header>
+
+  <!-- ===================== HOME SCREEN ===================== -->
+  <section class="screen active" id="screen-home">
+
+    <!-- Live match card (shown if match in progress) -->
+    <div id="live-match-area"></div>
+
+    <!-- Install Banner -->
+    <div class="install-banner" id="install-banner" style="display:none">
+      <span style="font-size:28px">📱</span>
+      <div class="install-banner-text">
+        <div class="install-banner-title">Install My Crick</div>
+        <div class="install-banner-desc">Add to home screen for offline access</div>
+      </div>
+      <button class="btn btn-sm btn-primary" id="btn-install">Install</button>
+    </div>
+
+    <!-- Quick Actions -->
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button class="btn btn-primary btn-full" id="btn-new-match" style="padding:14px;font-size:16px">
+        🏏 New Match
+      </button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" id="btn-player-registration" style="flex:1;padding:10px 4px;font-size:13px" onclick="openPlayerRegistrationModal()">
+          👥 Players
+        </button>
+        <button class="btn btn-secondary" id="btn-home-player-stats" style="flex:1;padding:10px 4px;font-size:13px" onclick="navigate('stats')">
+          📈 Stats
+        </button>
+        <button class="btn btn-secondary" id="btn-quick-history" style="flex:1;padding:10px 4px;font-size:13px" onclick="navigate('history')">
+          📜 History
+        </button>
+      </div>
+    </div>
+
+    <!-- Recent Matches -->
+    <div>
+      <div class="section-header">
+        <span class="section-title">Recent Matches</span>
+        <span class="section-link" id="btn-see-all-history">See all</span>
+      </div>
+      <div id="recent-matches-list" style="display:flex;flex-direction:column;gap:10px;margin-top:12px"></div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div>
+      <div class="section-header"><span class="section-title">Your Stats</span><span class="section-link" onclick="navigate('stats')">Player Stats →</span></div>
+      <div class="stat-chips" id="global-stats" style="margin-top:12px"></div>
+    </div>
+  </section>
+
+  <!-- ===================== NEW MATCH SCREEN ===================== -->
+  <section class="screen" id="screen-new-match">
+    <button class="back-btn" id="btn-back-home">← Back</button>
+
+    <div style="text-align:center">
+      <div style="font-size:40px;margin-bottom:8px">🏏</div>
+      <h1 style="font-family:var(--font-display);font-size:24px;font-weight:800;margin-bottom:4px">Setup Match</h1>
+      <p style="font-size:14px;color:var(--text-muted)">Configure your local cricket match</p>
+    </div>
+
+    <!-- Step dots -->
+    <div class="steps-indicator" id="setup-steps">
+      <div class="step-dot active" data-step="0"></div>
+      <div class="step-dot" data-step="1"></div>
+      <div class="step-dot" data-step="2"></div>
+    </div>
+
+    <!-- STEP 0: Match Details -->
+    <div id="setup-step-0">
+      <div class="card" style="display:flex;flex-direction:column;gap:16px">
+        <h2 style="font-size:16px;font-weight:700;color:var(--text-secondary)">Match Details</h2>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="team1-name">Team 1 Name</label>
+            <input class="form-input" type="text" id="team1-name" placeholder="e.g. Kashmir XI" maxlength="20" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="team2-name">Team 2 Name</label>
+            <input class="form-input" type="text" id="team2-name" placeholder="e.g. Dubai Stars" maxlength="20" />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="match-overs">Overs</label>
+            <input class="form-input" type="number" id="match-overs" placeholder="20" min="1" max="50" value="10" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="players-per-side">Players</label>
+            <input class="form-input" type="number" id="players-per-side" placeholder="11" min="2" max="11" value="11" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="match-venue">Venue (optional)</label>
+          <input class="form-input" type="text" id="match-venue" placeholder="e.g. Maidan Ground" maxlength="40" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="match-date">Date</label>
+          <input class="form-input" type="date" id="match-date" />
+        </div>
+      </div>
+      <button class="btn btn-primary btn-full" id="btn-step0-next" style="margin-top:12px">Continue ?</button>
+    </div>
+
+    <!-- STEP 1: Players -->
+    <div id="setup-step-1" style="display:none">
+      <div class="card" style="display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <h2 style="font-size:16px;font-weight:700;color:var(--text-secondary)" id="team1-players-title">Team 1 Players</h2>
+          <span style="font-size:12px;color:var(--text-muted)" id="players-count-label"></span>
+        </div>
+        <div class="players-builder" id="team1-players-builder"></div>
+      </div>
+
+      <div class="card" style="display:flex;flex-direction:column;gap:16px;margin-top:12px">
+        <h2 style="font-size:16px;font-weight:700;color:var(--text-secondary)" id="team2-players-title">Team 2 Players</h2>
+        <div class="players-builder" id="team2-players-builder"></div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <button class="btn btn-secondary" id="btn-step1-back" style="flex:1">? Back</button>
+        <button class="btn btn-primary" id="btn-step1-next" style="flex:2">Continue ?</button>
+      </div>
+    </div>
+
+    <!-- STEP 2: Toss -->
+    <div id="setup-step-2" style="display:none">
+      <div class="card" style="display:flex;flex-direction:column;gap:20px">
+        <h2 style="font-size:16px;font-weight:700;color:var(--text-secondary)">🪙 Toss Result</h2>
+
+        <div class="form-group">
+          <label class="form-label">Toss Won By</label>
+          <div class="toss-options" id="toss-winner-options"></div>
+        </div>
+
+        <div class="form-group" id="toss-decision-group">
+          <label class="form-label">Chose To</label>
+          <div class="toss-options">
+            <div class="toss-option" id="toss-bat" data-decision="bat" onclick="selectTossDecision('bat')">🏏 Bat</div>
+            <div class="toss-option" id="toss-bowl" data-decision="bowl" onclick="selectTossDecision('bowl')">🎳 Bowl</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <button class="btn btn-secondary" id="btn-step2-back" style="flex:1">? Back</button>
+        <button class="btn btn-gold" id="btn-start-match" style="flex:2">🏏 Start Match!</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== SCORING SCREEN ===================== -->
+  <section class="screen" id="screen-scoring">
+    <!-- Score Header -->
+    <div class="score-header" id="live-score-header">
+      <div class="score-teams-row">
+        <div class="score-team-block" id="batting-team-block">
+          <div class="score-team-name" id="batting-team-name">Team A</div>
+          <div class="score-team-runs" id="batting-score">0<span class="wickets">/0</span></div>
+          <div class="score-team-info" id="batting-overs-info">0.0 ov</div>
+        </div>
+        <div class="score-divider">
+          <div>vs</div>
+          <div class="overs" id="crr-display">CRR —</div>
+        </div>
+        <div class="score-team-block" id="bowling-team-block" style="text-align:right">
+          <div class="score-team-name" id="bowling-team-name">Team B</div>
+          <div class="score-team-runs" id="target-score" style="font-size:20px;color:var(--text-secondary)">—</div>
+          <div class="score-team-info" id="chase-info">Bowling</div>
+        </div>
+      </div>
+      <div class="target-row" id="target-row" style="display:none">
+        Need <strong id="runs-needed">—</strong> off <strong id="balls-remaining">•</strong> balls • RRR: <strong id="rrr-display">—</strong>
+      </div>
+    </div>
+
+    <!-- This Over -->
+    <div class="card this-over-card" id="this-over-card" style="padding:14px 16px;user-select:none;-webkit-user-select:none;touch-action:pan-y">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
+          <span class="scoring-label" id="this-over-title">This Over</span>
+          <span id="this-over-subinfo" style="font-size:11px;color:var(--text-muted);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <button class="nav-over-btn" id="btn-prev-over" title="Previous Over (Swipe right)" aria-label="Previous Over" onclick="changeViewingOver(-1)">&#8249;</button>
+          <span id="over-number-badge" style="font-size:12px;font-weight:700;color:var(--text-secondary);min-width:48px;text-align:center">Over 1</span>
+          <button class="nav-over-btn" id="btn-next-over" title="Next Over (Swipe left)" aria-label="Next Over" onclick="changeViewingOver(1)">&#8250;</button>
+          <button class="live-indicator-btn" id="btn-live-over" title="Jump to Live Over" style="display:none" onclick="jumpToLiveOver()">Live &#128308;</button>
+        </div>
+      </div>
+      <div class="this-over" id="this-over-balls"></div>
+      <div id="over-nav-hint" style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--text-muted)">
+        <span id="over-summary-text">Live • Over 1</span>
+        <span id="over-swipe-hint" style="opacity:0.75">&#8644; Swipe to view past overs</span>
+      </div>
+    </div>
+
+    <!-- Batters -->
+    <div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span class="scoring-label">At The Crease</span>
+        <button class="btn btn-sm btn-secondary" id="btn-change-batsman">Change</button>
+      </div>
+      <div class="batters-table" id="batters-table"></div>
+    </div>
+
+    <!-- Bowler -->
+    <div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span class="scoring-label">Bowling</span>
+        <button class="btn btn-sm btn-secondary" id="btn-change-bowler">Change</button>
+      </div>
+      <div class="bowler-card" id="bowler-card">
+        <span class="bowler-icon">🎳</span>
+        <div>
+          <div class="bowler-name" id="bowler-name">—</div>
+          <div class="bowler-overs-count" id="bowler-overs">0-0-0-0</div>
+        </div>
+        <div class="bowler-figures" id="bowler-figures"></div>
+      </div>
+    </div>
+
+    <!-- Scoring Buttons -->
+    <div class="scoring-section">
+      <span class="scoring-label">Runs</span>
+      <div class="runs-grid">
+        <button class="score-btn run-0" onclick="recordBall({runs:0})" aria-label="Dot ball">?<span>DOT</span></button>
+        <button class="score-btn run-1" onclick="recordBall({runs:1})" aria-label="1 run">1</button>
+        <button class="score-btn run-2" onclick="recordBall({runs:2})" aria-label="2 runs">2</button>
+        <button class="score-btn run-3" onclick="recordBall({runs:3})" aria-label="3 runs">3</button>
+        <button class="score-btn run-4" onclick="recordBall({runs:4})" aria-label="4 runs">4<span>FOUR</span></button>
+        <button class="score-btn run-5" onclick="recordBall({runs:5})" aria-label="5 runs">5</button>
+        <button class="score-btn run-6" onclick="recordBall({runs:6})" aria-label="6 runs">6<span>SIX!</span></button>
+        <button class="score-btn wicket" onclick="openWicketModal()" aria-label="Wicket">W<span>OUT</span></button>
+      </div>
+
+      <span class="scoring-label" style="margin-top:4px">Extras</span>
+      <div class="extras-grid">
+        <button class="score-btn wide" onclick="recordBall({extra:'Wide',runs:1})" aria-label="Wide">Wd<span>+1</span></button>
+        <button class="score-btn noball" onclick="recordBall({extra:'NoBall',runs:1})" aria-label="No ball">Nb<span>+1</span></button>
+        <button class="score-btn legbye" onclick="recordBall({extra:'LegBye',runs:1})" aria-label="Leg bye">Lb<span>+1</span></button>
+        <button class="score-btn bye" onclick="recordBall({extra:'Bye',runs:1})" aria-label="Bye">By<span>+1</span></button>
+      </div>
+
+      <button class="undo-btn" id="btn-undo" onclick="undoLastBall()">? Undo Last Ball</button>
+    </div>
+
+    <!-- Options row -->
+    <div style="display:flex;gap:10px;padding-bottom:20px">
+      <button class="btn btn-secondary" style="flex:1" id="btn-view-scorecard-live">📊 Scorecard</button>
+      <button class="btn btn-danger" style="flex:1" id="btn-end-innings">End Innings</button>
+    </div>
+  </section>
+
+  <!-- ===================== SCORECARD SCREEN ===================== -->
+  <section class="screen" id="screen-scorecard">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <button class="back-btn" id="btn-back-from-scorecard">← Back</button>
+      <span class="scoring-label" id="scorecard-match-label">Scorecard</span>
+      <button class="icon-btn" id="btn-download-scorecard" title="Download Scorecard" onclick="downloadScorecard()">&#128229;</button>
+    </div>
+
+    <!-- Result Card (shown after match ends) -->
+    <div id="result-card-area"></div>
+
+    <!-- Innings Tabs -->
+    <div class="innings-tabs" id="innings-tabs" style="display:none">
+      <button class="innings-tab active" data-innings="0" id="tab-innings-1">1st Innings</button>
+      <button class="innings-tab" data-innings="1" id="tab-innings-2">2nd Innings</button>
+    </div>
+
+    <!-- Scorecard Content -->
+    <div id="scorecard-content"></div>
+
+    <!-- Return to scoring button (if match ongoing) -->
+    <button class="btn btn-primary btn-full" id="btn-return-scoring" style="display:none">🏏 Return to Scoring</button>
+  </section>
+
+  
+  <!-- ===================== PLAYER STATS SCREEN ===================== -->
+  <section class="screen" id="screen-stats">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div>
+        <h1 style="font-family:var(--font-display);font-size:22px;font-weight:800;margin:0">Player Statistics</h1>
+        <p style="font-size:12px;color:var(--text-muted);margin:2px 0 0">Career batting & bowling leaderboards</p>
+      </div>
+      <button class="btn btn-sm btn-secondary" onclick="openPlayerRegistrationModal(false)">+ Player</button>
+    </div>
+
+    <!-- Leaderboard Top Highlights -->
+    <div class="stats-top-cards" id="stats-leaderboard-cards"></div>
+
+    <!-- Tabs: Batting, Bowling, Overview -->
+    <div class="stats-tabs">
+      <button class="stats-tab-btn active" id="tab-stats-batting" onclick="switchStatsTab('batting')">🏏 Batting</button>
+      <button class="stats-tab-btn" id="tab-stats-bowling" onclick="switchStatsTab('bowling')">🎳 Bowling</button>
+      <button class="stats-tab-btn" id="tab-stats-overview" onclick="switchStatsTab('overview')">⚡ Overview</button>
+    </div>
+
+    <!-- Search -->
+    <div style="margin-bottom:12px">
+      <input class="form-input" type="text" id="stats-search-input" placeholder="🔍 Search player name..." oninput="filterPlayerStats(this.value)" style="font-size:13px;padding:8px 12px" />
+    </div>
+
+    <!-- Stats Content Area -->
+    <div id="stats-content-area"></div>
+  </section>
+
+  <!-- ===================== HISTORY SCREEN ===================== -->
+  <section class="screen" id="screen-history">
+    <h1 style="font-family:var(--font-display);font-size:22px;font-weight:800">Match History</h1>
+    <div id="history-list" style="display:flex;flex-direction:column;gap:12px"></div>
+  </section>
+
+  <!-- ===================== SETTINGS SCREEN ===================== -->
+  <section class="screen" id="screen-settings">
+    <h1 style="font-family:var(--font-display);font-size:22px;font-weight:800">Settings</h1>
+
+    <div class="card" style="display:flex;flex-direction:column;gap:0">
+      <div class="settings-item">
+        <div class="settings-item-info">
+          <span class="settings-item-label">Sound Effects</span>
+          <span class="settings-item-desc">Play sounds on boundaries & wickets</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="setting-sound" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="divider"></div>
+      <div class="settings-item">
+        <div class="settings-item-info">
+          <span class="settings-item-label">Vibration</span>
+          <span class="settings-item-desc">Haptic feedback on scoring events</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="setting-vibration" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="divider"></div>
+      <div class="settings-item">
+        <div class="settings-item-info">
+          <span class="settings-item-label">Auto-rotate Strike</span>
+          <span class="settings-item-desc">Auto swap striker on odd runs</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="setting-auto-rotate" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="card" style="display:flex;flex-direction:column;gap:16px">
+      <div class="settings-item-label" style="margin-bottom:4px">Data</div>
+      <button class="btn btn-danger btn-full" id="btn-clear-data">🗑️ Clear All Match Data</button>
+    </div>
+
+    <div style="text-align:center;padding:20px 0">
+      <div style="font-size:13px;color:var(--text-muted)">My Crick v1.0.0</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Built with ❤️ for local cricket lovers</div>
+    </div>
+  </section>
+
+  <!-- BOTTOM NAV -->
+  <nav class="bottom-nav" id="bottom-nav">
+    <button class="nav-item active" id="nav-home" onclick="navigate('home')">
+      <span class="nav-icon">🏠</span>
+      <span class="nav-label">Home</span>
+    </button>
+    <button class="nav-item" id="nav-scoring" onclick="navigate('scoring')">
+      <span class="nav-icon">🏏</span>
+      <span class="nav-label">Score</span>
+    </button>
+    <button class="nav-item" id="nav-scorecard" onclick="navigate('scorecard')">
+      <span class="nav-icon">📊</span>
+      <span class="nav-label">Scorecard</span>
+    </button>
+    <button class="nav-item" id="nav-stats" onclick="navigate('stats')">
+      <span class="nav-icon">📈</span>
+      <span class="nav-label">Stats</span>
+    </button>
+    <button class="nav-item" id="nav-history" onclick="navigate('history')">
+      <span class="nav-icon">📜</span>
+      <span class="nav-label">History</span>
+    </button>
+  </nav>
+</div>
+
+<!-- ===== MODALS ===== -->
+
+<!-- Wicket Modal -->
+<div class="modal-overlay" id="wicket-modal">
+  <div class="modal">
+    <div class="modal-title">☝️ Wicket!</div>
+    <div class="modal-subtitle">Select how the batsman got out</div>
+
+    <div class="form-group" style="margin-bottom:14px">
+      <label class="form-label">Batsman Out</label>
+      <select class="form-select" id="wicket-batsman"></select>
+    </div>
+
+    <div class="form-group" style="margin-bottom:14px">
+      <label class="form-label">Dismissal Type</label>
+      <div class="wicket-types" id="wicket-types">
+        <div class="wicket-type-btn" onclick="selectDismissal('Bowled')">🎯 Bowled</div>
+        <div class="wicket-type-btn" onclick="selectDismissal('Caught')">🧤 Caught</div>
+        <div class="wicket-type-btn" onclick="selectDismissal('LBW')">🦵 LBW</div>
+        <div class="wicket-type-btn" onclick="selectDismissal('Run Out')">🏃 Run Out</div>
+        <div class="wicket-type-btn" onclick="selectDismissal('Stumped')">⚡ Stumped</div>
+        <div class="wicket-type-btn" onclick="selectDismissal('Hit Wicket')">💥 Hit Wkt</div>
+        <div class="wicket-type-btn" onclick="selectDismissal('Caught Behind')">🧤 Ct Behind</div>
+        <div class="wicket-type-btn" onclick="selectDismissal('Retired')">🚶 Retired</div>
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-bottom:6px" id="fielder-group">
+      <label class="form-label">Fielder (Caught/Run Out)</label>
+      <select class="form-select" id="wicket-fielder"><option value="">—</option></select>
+    </div>
+
+    <div class="form-group" id="wicket-runs-group" style="margin-bottom:6px">
+      <label class="form-label">Runs Scored This Ball</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="score-btn run-0" style="width:44px;height:44px;padding:8px;font-size:15px" onclick="setWicketRuns(0)">0</button>
+        <button class="score-btn run-1" style="width:44px;height:44px;padding:8px;font-size:15px" onclick="setWicketRuns(1)">1</button>
+        <button class="score-btn run-2" style="width:44px;height:44px;padding:8px;font-size:15px" onclick="setWicketRuns(2)">2</button>
+        <button class="score-btn run-3" style="width:44px;height:44px;padding:8px;font-size:15px" onclick="setWicketRuns(3)">3</button>
+      </div>
+    </div>
+
+    <div class="modal-btn-row">
+      <button class="btn btn-secondary" onclick="closeModal('wicket-modal')">Cancel</button>
+      <button class="btn btn-danger" id="btn-confirm-wicket" onclick="confirmWicket()">Confirm Out</button>
+    </div>
+  </div>
+</div>
+
+<!-- Opening Batters Modal -->
+<div class="modal-overlay" id="opening-batters-modal">
+  <div class="modal">
+    <div class="modal-title">👥 Select Opening Batters</div>
+    <div class="modal-subtitle" id="opening-batters-subtitle">Choose who will open the batting</div>
+
+    <div class="form-group" style="margin-bottom:14px">
+      <label class="form-label">🎯 Striker (Facing first ball)</label>
+      <select class="form-select" id="select-striker"></select>
+    </div>
+
+    <div class="form-group" style="margin-bottom:18px">
+      <label class="form-label">🏃 Non-Striker</label>
+      <select class="form-select" id="select-non-striker"></select>
+    </div>
+
+    <div class="modal-btn-row">
+      <button class="btn btn-secondary" id="btn-cancel-opening-batters" onclick="closeModal('opening-batters-modal')">Cancel</button>
+      <button class="btn btn-primary" id="btn-confirm-opening-batters" onclick="confirmOpeningBatters()">Confirm Openers</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Batter Modal -->
+<div class="modal-overlay" id="new-batter-modal">
+  <div class="modal">
+    <div class="modal-title">🏏 New Batsman</div>
+    <div class="modal-subtitle" id="new-batter-subtitle">Select the incoming batsman</div>
+    <div class="player-select-list" id="new-batter-list"></div>
+    <div class="modal-btn-row">
+      <button class="btn btn-secondary" onclick="closeModal('new-batter-modal')">Cancel</button>
+      <button class="btn btn-primary" id="btn-confirm-batter" onclick="confirmNewBatter()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Bowler Modal -->
+<div class="modal-overlay" id="new-bowler-modal">
+  <div class="modal">
+    <div class="modal-title">🎳 Select Bowler</div>
+    <div class="modal-subtitle">Choose who will bowl this over</div>
+    <div class="player-select-list" id="new-bowler-list"></div>
+    <div class="modal-btn-row">
+      <button class="btn btn-secondary" onclick="closeModal('new-bowler-modal')">Cancel</button>
+      <button class="btn btn-primary" id="btn-confirm-bowler" onclick="confirmNewBowler()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Innings End Modal -->
+<div class="modal-overlay" id="innings-end-modal">
+  <div class="modal">
+    <div style="text-align:center;margin-bottom:16px">
+      <div style="font-size:40px;margin-bottom:8px">👏</div>
+      <div class="modal-title" id="innings-end-title">Innings Complete!</div>
+      <div class="modal-subtitle" id="innings-end-subtitle"></div>
+    </div>
+    <div class="modal-btn-row" id="innings-end-actions">
+      <button class="btn btn-primary btn-full" id="btn-start-2nd-innings" onclick="startSecondInnings()">Start 2nd Innings 🏏</button>
+    </div>
+  </div>
+</div>
+
+<!-- Match End Modal -->
+<div class="modal-overlay" id="match-end-modal">
+  <div class="modal">
+    <div style="text-align:center;margin-bottom:20px">
+      <div style="font-size:52px;margin-bottom:10px" id="match-result-emoji">🏆</div>
+      <div class="modal-title" id="match-end-headline"></div>
+      <div style="font-size:15px;color:var(--text-secondary);margin-top:6px" id="match-end-by"></div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-secondary" style="flex:1" onclick="viewMatchScorecard()">📊 Scorecard</button>
+      <button class="btn btn-primary" style="flex:1" onclick="endMatch()">Done 🏠</button>
+    </div>
+  </div>
+</div>
+
+<!-- Change Batsman Modal (mid-innings) -->
+<div class="modal-overlay" id="change-batter-modal">
+  <div class="modal">
+    <div class="modal-title">👥 Batsmen At Crease</div>
+    <div class="modal-subtitle">Manage strike or change opening batsmen</div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+      <button class="btn btn-primary btn-full" onclick="swapStrike()">🔄 Swap Strike</button>
+      <button class="btn btn-secondary btn-full" id="btn-change-openers-action" onclick="closeModal('change-batter-modal'); openOpeningBattersModal(false)">👥 Change Opening Batters</button>
+    </div>
+    <div class="modal-btn-row">
+      <button class="btn btn-secondary btn-full" onclick="closeModal('change-batter-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Player Registration Modal -->
+<div class="modal-overlay" id="player-registration-modal">
+  <div class="modal" style="max-height:88vh;display:flex;flex-direction:column;padding:20px 16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div>
+        <div class="modal-title" style="margin:0;font-size:18px">👥 Player Registration</div>
+        <div class="modal-subtitle" style="margin:2px 0 0">Register and manage your squad</div>
+      </div>
+      <button class="icon-btn" onclick="closePlayerRegistrationModal()" style="width:32px;height:32px;font-size:14px">✕</button>
+    </div>
+
+    <!-- Add New Player Form -->
+    <div class="card" style="padding:12px;margin-bottom:12px;background:rgba(255,255,255,0.03)">
+      <div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px">Add New Player</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <input class="form-input" type="text" id="reg-player-name" placeholder="Player Full Name" maxlength="25" />
+        <div style="display:flex;gap:8px">
+          <select class="form-select" id="reg-player-role" style="flex:1">
+            <option value="Batsman">🏏 Batsman</option>
+            <option value="Bowler">🎳 Bowler</option>
+            <option value="All-Rounder" selected>⚡ All-Rounder</option>
+            <option value="Wicket-Keeper">🧤 Wicket-Keeper</option>
+          </select>
+          <button class="btn btn-primary" id="btn-add-player" onclick="submitNewPlayer()" style="padding:8px 16px;white-space:nowrap">
+            + Add
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Registered Players List Section -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <span style="font-size:13px;font-weight:700;color:var(--text-secondary)" id="reg-players-count">Registered Players (0)</span>
+      <span style="font-size:11px;color:var(--text-muted)">Stored on device</span>
+    </div>
+
+    <div id="registered-players-list" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;max-height:280px;padding-right:2px">
+      <!-- Dynamic list of players -->
+    </div>
+
+    <div class="modal-btn-row" style="margin-top:14px">
+      <button class="btn btn-secondary btn-full" onclick="closePlayerRegistrationModal()">Done</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Player Profile Modal -->
+<div class="modal-overlay" id="player-profile-modal">
+  <div class="modal" style="max-height:88vh;display:flex;flex-direction:column;padding:20px 16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span id="prof-role-icon" style="font-size:24px">🏏</span>
+        <div>
+          <div class="modal-title" id="prof-player-name" style="margin:0;font-size:18px">Player Name</div>
+          <span class="role-badge" id="prof-player-role">Batsman</span>
+        </div>
+      </div>
+      <button class="icon-btn" onclick="closeModal('player-profile-modal')" style="width:32px;height:32px;font-size:14px">✕</button>
+    </div>
+    <div id="prof-player-content" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding-right:2px">
+      <!-- Populated dynamically -->
+    </div>
+    <div class="modal-btn-row" style="margin-top:14px">
+      <button class="btn btn-secondary btn-full" onclick="closeModal('player-profile-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="app.js?v=2.8"></script>
+</body>
+</html>
