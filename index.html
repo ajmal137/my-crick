@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="styles.css?v=2.9" />
+  <link rel="stylesheet" href="styles.css?v=2.10" />
 </head>
 <body>
 
@@ -57,14 +57,17 @@
       <button class="btn btn-primary btn-full" id="btn-new-match" style="padding:14px;font-size:16px">
         🏏 New Match
       </button>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-secondary" id="btn-player-registration" style="flex:1;padding:10px 4px;font-size:13px" onclick="openPlayerRegistrationModal()">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+        <button class="btn btn-secondary" id="btn-home-teams" style="padding:10px 2px;font-size:12px" onclick="openTeamsModal()">
+          🛡️ Teams
+        </button>
+        <button class="btn btn-secondary" id="btn-player-registration" style="padding:10px 2px;font-size:12px" onclick="openPlayerRegistrationModal()">
           👥 Players
         </button>
-        <button class="btn btn-secondary" id="btn-home-player-stats" style="flex:1;padding:10px 4px;font-size:13px" onclick="navigate('stats')">
+        <button class="btn btn-secondary" id="btn-home-player-stats" style="padding:10px 2px;font-size:12px" onclick="navigate('stats')">
           📈 Stats
         </button>
-        <button class="btn btn-secondary" id="btn-quick-history" style="flex:1;padding:10px 4px;font-size:13px" onclick="navigate('history')">
+        <button class="btn btn-secondary" id="btn-quick-history" style="padding:10px 2px;font-size:12px" onclick="navigate('history')">
           📜 History
         </button>
       </div>
@@ -110,12 +113,24 @@
 
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label" for="team1-name">Team 1 Name</label>
-            <input class="form-input" type="text" id="team1-name" placeholder="e.g. Kashmir XI" maxlength="20" />
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <label class="form-label" for="team1-select" style="margin:0">Team 1</label>
+              <button type="button" class="btn btn-sm btn-secondary" onclick="openTeamsModal(true)" style="padding:2px 6px;font-size:11px" title="Manage Saved Teams">⚙️ Teams</button>
+            </div>
+            <select class="form-select" id="team1-select" onchange="onTeamSelectChange(1)" style="margin-bottom:6px">
+              <option value="">— Select Saved Team or Custom —</option>
+            </select>
+            <input class="form-input" type="text" id="team1-name" placeholder="Team 1 Name" maxlength="20" />
           </div>
           <div class="form-group">
-            <label class="form-label" for="team2-name">Team 2 Name</label>
-            <input class="form-input" type="text" id="team2-name" placeholder="e.g. Dubai Stars" maxlength="20" />
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <label class="form-label" for="team2-select" style="margin:0">Team 2</label>
+              <button type="button" class="btn btn-sm btn-secondary" onclick="openTeamsModal(true)" style="padding:2px 6px;font-size:11px" title="Manage Saved Teams">⚙️ Teams</button>
+            </div>
+            <select class="form-select" id="team2-select" onchange="onTeamSelectChange(2)" style="margin-bottom:6px">
+              <option value="">— Select Saved Team or Custom —</option>
+            </select>
+            <input class="form-input" type="text" id="team2-name" placeholder="Team 2 Name" maxlength="20" />
           </div>
         </div>
 
@@ -390,6 +405,17 @@
           <span class="toggle-slider"></span>
         </label>
       </div>
+      <div class="divider"></div>
+      <div class="settings-item">
+        <div class="settings-item-info">
+          <span class="settings-item-label">Auto-swap Strike Between Overs</span>
+          <span class="settings-item-desc">Rotate striker at the end of each over</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="setting-auto-rotate-over" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
     </div>
 
     <!-- Backup & Data Card -->
@@ -460,11 +486,6 @@
     <div class="modal-subtitle">Select how the batsman got out</div>
 
     <div class="form-group" style="margin-bottom:14px">
-      <label class="form-label">Batsman Out</label>
-      <select class="form-select" id="wicket-batsman"></select>
-    </div>
-
-    <div class="form-group" style="margin-bottom:14px">
       <label class="form-label">Dismissal Type</label>
       <div class="wicket-types" id="wicket-types">
         <div class="wicket-type-btn" onclick="selectDismissal('Bowled')">🎯 Bowled</div>
@@ -478,18 +499,36 @@
       </div>
     </div>
 
+    <!-- Select Batter Out (Cards for Run Out/Retired, Auto-locked for Bowled/Caught) -->
+    <div class="form-group" style="margin-bottom:12px" id="wicket-batter-group">
+      <label class="form-label" id="wicket-batter-heading">Batter Dismissed</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="wicket-batter-cards">
+        <div class="runout-batter-card selected" id="ro-striker-card" onclick="selectWicketBatter(0)">
+          <div class="ro-badge" style="color:var(--accent-gold)">🎯 Striker</div>
+          <div class="ro-name" id="ro-striker-name">—</div>
+          <div class="ro-stats" id="ro-striker-stats">Facing</div>
+        </div>
+        <div class="runout-batter-card" id="ro-nonstriker-card" onclick="selectWicketBatter(1)">
+          <div class="ro-badge" style="color:var(--text-muted)">🏃 Non-Striker</div>
+          <div class="ro-name" id="ro-nonstriker-name">—</div>
+          <div class="ro-stats" id="ro-nonstriker-stats">Runner's End</div>
+        </div>
+      </div>
+      <select class="form-select" id="wicket-batsman" style="display:none"></select>
+    </div>
+
     <div class="form-group" style="margin-bottom:6px" id="fielder-group">
-      <label class="form-label">Fielder (Caught/Run Out)</label>
+      <label class="form-label" id="wicket-fielder-label">Fielder (Catch / Throw)</label>
       <select class="form-select" id="wicket-fielder"><option value="">—</option></select>
     </div>
 
     <div class="form-group" id="wicket-runs-group" style="margin-bottom:6px">
-      <label class="form-label">Runs Scored This Ball</label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="score-btn run-0" style="width:44px;height:44px;padding:8px;font-size:15px" onclick="setWicketRuns(0)">0</button>
-        <button class="score-btn run-1" style="width:44px;height:44px;padding:8px;font-size:15px" onclick="setWicketRuns(1)">1</button>
-        <button class="score-btn run-2" style="width:44px;height:44px;padding:8px;font-size:15px" onclick="setWicketRuns(2)">2</button>
-        <button class="score-btn run-3" style="width:44px;height:44px;padding:8px;font-size:15px" onclick="setWicketRuns(3)">3</button>
+      <label class="form-label" id="wicket-runs-label">Runs Completed Before Out</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap" id="wicket-runs-selector">
+        <button type="button" class="score-btn run-0" id="btn-wkt-run-0" style="width:44px;height:44px;padding:8px;font-size:15px" onclick="setWicketRuns(0)">0</button>
+        <button type="button" class="score-btn run-1" id="btn-wkt-run-1" style="width:44px;height:44px;padding:8px;font-size:15px" onclick="setWicketRuns(1)">1</button>
+        <button type="button" class="score-btn run-2" id="btn-wkt-run-2" style="width:44px;height:44px;padding:8px;font-size:15px" onclick="setWicketRuns(2)">2</button>
+        <button type="button" class="score-btn run-3" id="btn-wkt-run-3" style="width:44px;height:44px;padding:8px;font-size:15px" onclick="setWicketRuns(3)">3</button>
       </div>
     </div>
 
@@ -711,10 +750,78 @@
   </div>
 </div>
 
+
+<!-- Teams Directory Modal -->
+<div class="modal-overlay" id="teams-modal">
+  <div class="modal" style="max-height:88vh;display:flex;flex-direction:column;padding:20px 16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:24px">🛡️</span>
+        <div>
+          <div class="modal-title" style="margin:0;font-size:18px">Teams Directory</div>
+          <div class="modal-subtitle" id="teams-count-label" style="margin:2px 0 0">0 Teams Saved</div>
+        </div>
+      </div>
+      <button class="btn btn-sm btn-primary" onclick="openTeamEditorModal(null)">+ Create Team</button>
+    </div>
+
+    <!-- Search input -->
+    <div class="form-group" style="margin-bottom:12px">
+      <input class="form-input" type="text" id="teams-search-input" placeholder="🔍 Search teams..." oninput="filterSavedTeamsList()" />
+    </div>
+
+    <!-- Teams List -->
+    <div id="saved-teams-list" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-right:2px;max-height:300px">
+      <!-- Dynamic list of teams -->
+    </div>
+
+    <div class="modal-btn-row" style="margin-top:14px">
+      <button class="btn btn-secondary btn-full" onclick="closeTeamsModal()">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Team Editor Modal (Create / Edit) -->
+<div class="modal-overlay" id="team-editor-modal">
+  <div class="modal" style="max-height:90vh;display:flex;flex-direction:column;padding:20px 16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div class="modal-title" id="team-editor-title" style="margin:0;font-size:18px">Create Team</div>
+      <button class="icon-btn" onclick="closeModal('team-editor-modal')" style="width:32px;height:32px;font-size:14px">✕</button>
+    </div>
+
+    <input type="hidden" id="team-editor-id" value="" />
+
+    <!-- Team Name -->
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label" for="team-editor-name">Team Name</label>
+      <input class="form-input" type="text" id="team-editor-name" placeholder="e.g. Kashmir XI" maxlength="25" />
+    </div>
+
+    <!-- Players Header & Quick Add -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <span class="form-label" style="margin:0" id="team-editor-players-label">Squad Players (0)</span>
+      <div style="display:flex;gap:6px">
+        <button type="button" class="btn btn-sm btn-secondary" onclick="addRegisteredToTeamEditor()" style="padding:3px 8px;font-size:11px" title="Import all registered players">+ All Registered</button>
+        <button type="button" class="btn btn-sm btn-primary" onclick="addPlayerRowToTeamEditor()" style="padding:3px 8px;font-size:11px">+ Add Player</button>
+      </div>
+    </div>
+
+    <!-- Squad Players List -->
+    <div id="team-editor-players-list" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding-right:2px;max-height:240px">
+      <!-- Dynamic list of player rows -->
+    </div>
+
+    <div class="modal-btn-row" style="margin-top:14px">
+      <button class="btn btn-secondary" onclick="closeModal('team-editor-modal')" style="flex:1">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTeamFromEditor()" style="flex:2">💾 Save Team</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast Container -->
 <div id="toast-container"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="app.js?v=2.9"></script>
+<script src="app.js?v=2.10"></script>
 </body>
 </html>

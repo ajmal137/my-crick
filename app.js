@@ -10,6 +10,7 @@ const DB_KEY   = 'myCrick_matches';
 const ST_KEY   = 'myCrick_state';
 const CFG_KEY  = 'myCrick_config';
 const PLAYERS_KEY = 'myCrick_registered_players';
+const TEAMS_KEY   = 'myCrick_saved_teams';
 let _isFromSetup = false;
 
 let state = null;              // Live match state
@@ -51,12 +52,15 @@ document.addEventListener('DOMContentLoaded', () => {
   setupPWAInstall();
   setupEventListeners();
   populateMatchDate();
+  populateTeamDropdowns();
 });
 
 function applyConfig() {
   document.getElementById('setting-sound').checked     = config.sound;
   document.getElementById('setting-vibration').checked = config.vibration;
   document.getElementById('setting-auto-rotate').checked = config.autoRotate !== false;
+  const autoOverEl = document.getElementById('setting-auto-rotate-over');
+  if (autoOverEl) autoOverEl.checked = config.autoRotateOver !== false;
 }
 
 function setupEventListeners() {
@@ -64,6 +68,7 @@ function setupEventListeners() {
   document.getElementById('setting-sound').addEventListener('change', e => { config.sound = e.target.checked; save(CFG_KEY, config); });
   document.getElementById('setting-vibration').addEventListener('change', e => { config.vibration = e.target.checked; save(CFG_KEY, config); });
   document.getElementById('setting-auto-rotate').addEventListener('change', e => { config.autoRotate = e.target.checked; save(CFG_KEY, config); });
+  document.getElementById('setting-auto-rotate-over')?.addEventListener('change', e => { config.autoRotateOver = e.target.checked; save(CFG_KEY, config); });
 
   // Clear data button — use event listener so it works regardless of onclick scope
   document.getElementById('btn-clear-data').addEventListener('click', clearAllData);
@@ -160,6 +165,7 @@ function navigate(screen) {
   if (screen === 'home')      renderHomeScreen();
   if (screen === 'history')   renderHistoryScreen();
   if (screen === 'stats')     renderPlayerStatsScreen();
+  if (screen === 'new-match') populateTeamDropdowns();
   if (screen === 'scorecard' && (state || viewingHistoryMatch)) {
     const matchToShow = viewingHistoryMatch || state;
     const hasTwo = matchToShow.innings.length > 1;
@@ -206,11 +212,19 @@ function step0Next() {
   if (t1 === t2)  { showToast('⚠️', 'Team names must be different'); return; }
   if (overs < 1 || overs > 50) { showToast('⚠️', 'Overs must be between 1 and 50'); return; }
 
+  // Check if saved teams were selected
+  const teams = loadSavedTeams();
+  const t1SelectVal = document.getElementById('team1-select')?.value;
+  const t2SelectVal = document.getElementById('team2-select')?.value;
+
+  const savedTeam1 = teams.find(t => t.id === t1SelectVal || t.name.toLowerCase() === t1.toLowerCase());
+  const savedTeam2 = teams.find(t => t.id === t2SelectVal || t.name.toLowerCase() === t2.toLowerCase());
+
   setupData = { team1: t1, team2: t2, overs, numPlayers, venue, date };
 
-  // Build player input fields
-  buildPlayerInputs('team1-players-builder', t1, numPlayers);
-  buildPlayerInputs('team2-players-builder', t2, numPlayers);
+  // Build player input fields, pre-filling from saved team if available
+  buildPlayerInputs('team1-players-builder', t1, numPlayers, savedTeam1?.players);
+  buildPlayerInputs('team2-players-builder', t2, numPlayers, savedTeam2?.players);
   document.getElementById('team1-players-title').textContent = `${t1} Players`;
   document.getElementById('team2-players-title').textContent = `${t2} Players`;
   document.getElementById('players-count-label').textContent = `${numPlayers} players`;
@@ -218,7 +232,7 @@ function step0Next() {
   setSetupStep(1);
 }
 
-function buildPlayerInputs(containerId, teamName, count) {
+function buildPlayerInputs(containerId, teamName, count, prefillList = null) {
   const container = document.getElementById(containerId);
   container.innerHTML = '';
   const defaultNames = [
@@ -229,12 +243,14 @@ function buildPlayerInputs(containerId, teamName, count) {
 
   // Top action bar
   const topBar = document.createElement('div');
-  topBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;font-size:12px';
+  topBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;font-size:12px;flex-wrap:wrap;gap:6px';
+  const isLoadedFromTeam = prefillList && prefillList.length > 0;
   topBar.innerHTML = `
-    <span style="color:var(--text-muted);font-size:11px">Pick from dropdown or type name</span>
+    <span style="color:var(--text-muted);font-size:11px">${isLoadedFromTeam ? '🛡️ Loaded from Saved Team' : 'Pick from dropdown or type name'}</span>
     <div style="display:flex;gap:6px">
       ${regPlayers.length > 0 ? `<button type="button" class="btn btn-sm btn-secondary" onclick="quickFillSquad('${containerId}', ${count})" style="padding:3px 8px;font-size:11px" title="Auto-fill slots with registered players">⚡ Quick Fill</button>` : ''}
       <button type="button" class="btn btn-sm btn-secondary" onclick="openPlayerRegistrationModal(true)" style="padding:3px 8px;font-size:11px">+ Register</button>
+      <button type="button" class="btn btn-sm btn-secondary" onclick="saveLineupAsTeam('${containerId}', '${teamName.replace(/'/g, "\\'")}')" style="padding:3px 8px;font-size:11px" title="Save this lineup to saved teams">💾 Save Team</button>
     </div>
   `;
   container.appendChild(topBar);
@@ -250,6 +266,8 @@ function buildPlayerInputs(containerId, teamName, count) {
       optionsHtml += `<option value="${p.name}">${roleIcon} ${p.name} (${p.role || 'Player'})</option>`;
     });
 
+    const prefillVal = prefillList && prefillList[i] ? (typeof prefillList[i] === 'string' ? prefillList[i] : prefillList[i].name) : '';
+
     card.innerHTML = `
       <div class="player-slot-card-top">
         <div class="player-num">${i+1}</div>
@@ -257,10 +275,44 @@ function buildPlayerInputs(containerId, teamName, count) {
           ${optionsHtml}
         </select>
       </div>
-      <input class="form-input player-name-input" type="text" placeholder="${defaultNames[i] || `Player ${i+1}`}" maxlength="25" data-idx="${i}" />
+      <input class="form-input player-name-input" type="text" placeholder="${defaultNames[i] || `Player ${i+1}`}" maxlength="25" data-idx="${i}" value="${prefillVal.replace(/"/g, '&quot;')}" />
     `;
     container.appendChild(card);
+
+    if (prefillVal) {
+      const selectEl = card.querySelector('.player-dropdown-select');
+      if (selectEl) selectEl.value = prefillVal;
+    }
   }
+}
+
+function saveLineupAsTeam(containerId, teamName) {
+  const inputs = document.querySelectorAll(`#${containerId} .player-name-input`);
+  const players = [];
+  inputs.forEach(inp => {
+    const val = inp.value.trim();
+    if (val) players.push(val);
+  });
+  if (!teamName) {
+    showToast('⚠️', 'Team name missing');
+    return;
+  }
+  const teams = loadSavedTeams();
+  const existingIdx = teams.findIndex(t => t.name.toLowerCase() === teamName.toLowerCase());
+  if (existingIdx !== -1) {
+    teams[existingIdx].players = players;
+    teams[existingIdx].updatedAt = new Date().toISOString();
+  } else {
+    teams.push({
+      id: 'team_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+      name: teamName,
+      players: players,
+      createdAt: new Date().toISOString()
+    });
+  }
+  saveSavedTeams(teams);
+  populateTeamDropdowns();
+  showToast('💾', `Lineup saved to team "${teamName}" (${players.length} players)`);
 }
 
 function onPlayerDropdownSelect(selectEl, containerId, idx) {
@@ -509,7 +561,12 @@ function recordBall(opts) {
     inn.balls++;
     if (bowlerIdx !== null) inn.bowlingPlayers[bowlerIdx].balls++;
 
-    // Over complete?
+    // 1. Rotate strike on odd runs scored on THIS delivery (batters cross ends)
+    if (runs % 2 === 1 && config.autoRotate !== false) {
+      swapStrikeAuto();
+    }
+
+    // 2. Over complete?
     if (inn.balls === 6) {
       overFinished = true;
       inn.overs++;
@@ -523,16 +580,14 @@ function recordBall(opts) {
         if (thisOverRuns === 0) inn.bowlingPlayers[bowlerIdx].maidens++;
       }
       inn.lastOverBowlerIdx = bowlerIdx;
-      // Swap strike at end of over
-      swapStrikeAuto();
       // Clear current bowler so next over MUST select a different bowler!
       inn.currentBowlerIdx = null;
-    }
-  }
 
-  // Rotate strike on odd runs (if over didn't finish)
-  if (isLegal && runs % 2 === 1 && !overFinished && config.autoRotate !== false) {
-    swapStrikeAuto();
+      // Auto-swap strike between overs (ends change)
+      if (config.autoRotateOver !== false) {
+        swapStrikeAuto();
+      }
+    }
   }
 
   saveState();
@@ -546,7 +601,10 @@ function recordBall(opts) {
 
   // If over finished and innings is still active, immediately prompt for new bowler
   if (overFinished && !inn.completed && !state.matchOver) {
-    showToast('🔔 OVER COMPLETE', 'Select bowler for next over');
+    const nextStrikerName = (inn.currentBatters[inn.strikerIdx] >= 0)
+      ? inn.battingPlayers[inn.currentBatters[inn.strikerIdx]].name
+      : 'Next batter';
+    showToast('🔔 OVER COMPLETE', `${nextStrikerName} is on strike`);
     openBowlerModal(true);
   }
 }
@@ -583,6 +641,7 @@ function recordWicket(opts) {
   const { batsmanOut, dismissal, fielder, runs = 0, bowlerIdx } = opts;
   const strikerAtCrease = inn.currentBatters[inn.strikerIdx];
   const bwlr = bowlerIdx !== null ? bowlerIdx : inn.currentBowlerIdx;
+  const isStrikerOut = (batsmanOut === strikerAtCrease);
 
   // Exact over and ball number for this ball
   const overNum = inn.overs;
@@ -599,14 +658,12 @@ function recordWicket(opts) {
     if (runs > 0) inn.battingPlayers[strikerAtCrease].runs += runs;
   }
 
-  // Bowler stats:
-  // Bowler gets the wicket UNLESS Run Out or Retired
+  // Bowler stats: Bowler gets the wicket UNLESS Run Out or Retired
   if (bwlr !== null) {
     if (dismissal !== 'Run Out' && dismissal !== 'Retired') {
       inn.bowlingPlayers[bwlr].wickets++;
     }
     inn.bowlingPlayers[bwlr].runs += runs;
-    // ALWAYS count the delivery for the bowler (Run Outs are legal balls bowled)
     inn.bowlingPlayers[bwlr].balls++;
   }
 
@@ -628,6 +685,14 @@ function recordWicket(opts) {
   };
   inn.allBalls.push(ball);
 
+  // 1. If odd runs were completed before run-out, batters crossed ends
+  let battersCrossed = false;
+  if (runs % 2 === 1 && config.autoRotate !== false) {
+    battersCrossed = true;
+    swapStrikeAuto();
+  }
+
+  // 2. Over complete?
   let overFinished = false;
   if (inn.balls === 6) {
     overFinished = true;
@@ -641,11 +706,12 @@ function recordWicket(opts) {
       if (thisOverRuns === 0) inn.bowlingPlayers[bwlr].maidens++;
     }
     inn.lastOverBowlerIdx = bwlr;
-    swapStrikeAuto();
-    // Clear current bowler so next over MUST select a different bowler!
     inn.currentBowlerIdx = null;
-  } else if (runs % 2 === 1 && config.autoRotate !== false) {
-    swapStrikeAuto();
+
+    // Auto-swap strike between overs (ends change)
+    if (config.autoRotateOver !== false) {
+      swapStrikeAuto();
+    }
   }
 
   showToast('🔴 WICKET!', `${inn.battingPlayers[batsmanOut].name} — ${dismissal}`);
@@ -657,6 +723,21 @@ function recordWicket(opts) {
     inn.currentBatters[outPos] = -1;
   }
 
+  // Determine who takes strike when the incoming batsman enters:
+  if (overFinished) {
+    // If over finished on this ball, the not-out batter faces the first ball of the next over!
+    window._newBatterTakesStrike = false;
+  } else {
+    // Over did not finish:
+    if (isStrikerOut) {
+      // Striker was dismissed. If batters crossed, partner faces; otherwise new batter takes strike.
+      window._newBatterTakesStrike = !battersCrossed;
+    } else {
+      // Non-striker was dismissed. If batters crossed, new batter takes strike; otherwise striker stays on strike.
+      window._newBatterTakesStrike = battersCrossed;
+    }
+  }
+
   saveState();
   checkInningsEnd();
   renderScoringScreen();
@@ -666,7 +747,10 @@ function recordWicket(opts) {
     if (outPos !== -1) {
       openNewBatterModal(outPos);
     } else if (overFinished) {
-      showToast('🔔 OVER COMPLETE', 'Select bowler for next over');
+      const nextStrikerName = (inn.currentBatters[inn.strikerIdx] >= 0)
+        ? inn.battingPlayers[inn.currentBatters[inn.strikerIdx]].name
+        : 'Next batter';
+      showToast('🔔 OVER COMPLETE', `${nextStrikerName} is on strike`);
       openBowlerModal(true);
     }
   }
@@ -1029,13 +1113,26 @@ function confirmNewBatter() {
   if (window._selectedBatter === null) { showToast('⚠️', 'Select a batsman'); return; }
   const inn = currentInnings();
   inn.currentBatters[window._newBatterPos] = window._selectedBatter;
-  inn.strikerIdx = window._newBatterPos; // new batter faces
+
+  // Determine strike:
+  if (window._newBatterTakesStrike === false) {
+    // Partner faces (the other slot)
+    inn.strikerIdx = window._newBatterPos === 0 ? 1 : 0;
+  } else {
+    // New batter faces
+    inn.strikerIdx = window._newBatterPos;
+  }
+
   closeModal('new-batter-modal');
   saveState();
   renderScoringScreen();
 
   // If over had also completed on that wicket ball, prompt for the new bowler now
   if (inn.balls === 0 && inn.overs > 0 && inn.currentBowlerIdx === null && !inn.completed && !state.matchOver) {
+    const nextStrikerName = (inn.currentBatters[inn.strikerIdx] >= 0)
+      ? inn.battingPlayers[inn.currentBatters[inn.strikerIdx]].name
+      : 'Next batter';
+    showToast('🔔 OVER COMPLETE', `${nextStrikerName} is on strike`);
     setTimeout(() => openBowlerModal(true), 350);
   }
 }
@@ -1044,7 +1141,7 @@ window.confirmNewBatter = confirmNewBatter;
 // ============================================================
 //  WICKET MODAL
 // ============================================================
-let wicketState = { dismissal: null, batsmanOut: null, fielder: null, runs: 0 };
+let wicketState = { dismissal: null, batsmanOut: null, fielder: null, runs: 0, batterSlot: 0 };
 
 function openWicketModal() {
   if (!state || state.matchOver) return;
@@ -1072,47 +1169,131 @@ function openWicketModal() {
     return;
   }
 
-  wicketState = { dismissal: null, batsmanOut: inn.currentBatters[inn.strikerIdx], fielder: null, runs: 0 };
-  setWicketRuns(0);
+  const strikerIdx = inn.strikerIdx;
+  const nonStrikerIdx = inn.strikerIdx === 0 ? 1 : 0;
+  const strikerBatterIdx = inn.currentBatters[strikerIdx];
+  const nonStrikerBatterIdx = inn.currentBatters[nonStrikerIdx];
+  const strikerP = inn.battingPlayers[strikerBatterIdx];
+  const nonStrikerP = inn.battingPlayers[nonStrikerBatterIdx];
 
-  // Populate batsman select
-  const batSel = document.getElementById('wicket-batsman');
-  batSel.innerHTML = '';
-  inn.currentBatters.forEach((bi, idx) => {
-    if (bi < 0) return;
-    const opt = document.createElement('option');
-    opt.value = bi;
-    opt.textContent = inn.battingPlayers[bi].name + (idx === inn.strikerIdx ? ' *' : '');
-    if (idx === inn.strikerIdx) opt.selected = true;
-    batSel.appendChild(opt);
-  });
-  batSel.addEventListener('change', () => { wicketState.batsmanOut = parseInt(batSel.value); });
+  const roStrikerName = document.getElementById('ro-striker-name');
+  const roStrikerStats = document.getElementById('ro-striker-stats');
+  const roNonStrikerName = document.getElementById('ro-nonstriker-name');
+  const roNonStrikerStats = document.getElementById('ro-nonstriker-stats');
+
+  if (roStrikerName && strikerP) {
+    roStrikerName.textContent = strikerP.name;
+    roStrikerStats.textContent = `${strikerP.runs} (${strikerP.balls}b) • Striker`;
+  }
+  if (roNonStrikerName && nonStrikerP) {
+    roNonStrikerName.textContent = nonStrikerP.name;
+    roNonStrikerStats.textContent = `${nonStrikerP.runs} (${nonStrikerP.balls}b) • Non-Striker`;
+  }
+
+  wicketState = {
+    dismissal: null,
+    batsmanOut: strikerBatterIdx,
+    fielder: null,
+    runs: 0,
+    batterSlot: 0
+  };
+  setWicketRuns(0);
+  selectWicketBatter(0);
 
   // Populate fielder select
   const fldSel = document.getElementById('wicket-fielder');
-  fldSel.innerHTML = '<option value="">—</option>';
-  currentInnings().bowlingPlayers.forEach((p, i) => {
-    const opt = document.createElement('option');
-    opt.value = i; opt.textContent = p.name;
-    fldSel.appendChild(opt);
-  });
-  fldSel.addEventListener('change', () => { wicketState.fielder = fldSel.options[fldSel.selectedIndex].text; });
+  if (fldSel) {
+    fldSel.innerHTML = '<option value="">—</option>';
+    currentInnings().bowlingPlayers.forEach((p, i) => {
+      const opt = document.createElement('option');
+      opt.value = i; opt.textContent = p.name;
+      fldSel.appendChild(opt);
+    });
+    fldSel.onchange = () => { wicketState.fielder = fldSel.options[fldSel.selectedIndex].text; };
+  }
 
-  // Reset selection
+  // Reset selection & default to Bowled
   document.querySelectorAll('#wicket-types .wicket-type-btn').forEach(b => b.classList.remove('selected'));
+  selectDismissal('Bowled');
+
   openModal('wicket-modal');
 }
 window.openWicketModal = openWicketModal;
 
+function selectWicketBatter(cardIdx) {
+  if (!state) return;
+  const inn = currentInnings();
+  if (!inn) return;
+
+  const strikerBatterIdx = inn.currentBatters[inn.strikerIdx];
+  const nonStrikerBatterIdx = inn.currentBatters[inn.strikerIdx === 0 ? 1 : 0];
+
+  const strikerCard = document.getElementById('ro-striker-card');
+  const nonStrikerCard = document.getElementById('ro-nonstriker-card');
+
+  if (cardIdx === 0) {
+    // Striker selected
+    wicketState.batsmanOut = strikerBatterIdx;
+    wicketState.batterSlot = 0;
+    if (strikerCard) strikerCard.classList.add('selected');
+    if (nonStrikerCard) nonStrikerCard.classList.remove('selected');
+  } else {
+    // Non-striker selected
+    wicketState.batsmanOut = nonStrikerBatterIdx;
+    wicketState.batterSlot = 1;
+    if (strikerCard) strikerCard.classList.remove('selected');
+    if (nonStrikerCard) nonStrikerCard.classList.add('selected');
+  }
+}
+window.selectWicketBatter = selectWicketBatter;
+
 function selectDismissal(type) {
   wicketState.dismissal = type;
-  document.querySelectorAll('#wicket-types .wicket-type-btn').forEach(b => b.classList.toggle('selected', b.textContent.includes(type.split(' ')[0])));
+  document.querySelectorAll('#wicket-types .wicket-type-btn').forEach(b => {
+    b.classList.toggle('selected', b.textContent.includes(type.split(' ')[0]));
+  });
+
+  const headingEl = document.getElementById('wicket-batter-heading');
+  const strikerCard = document.getElementById('ro-striker-card');
+  const nonStrikerCard = document.getElementById('ro-nonstriker-card');
+  const runsGroup = document.getElementById('wicket-runs-group');
+  const fielderGroup = document.getElementById('fielder-group');
+  const fielderLabel = document.getElementById('wicket-fielder-label');
+
+  if (type === 'Run Out') {
+    if (headingEl) headingEl.textContent = 'Which Batter is Run Out?';
+    if (strikerCard) strikerCard.classList.remove('disabled');
+    if (nonStrikerCard) nonStrikerCard.classList.remove('disabled');
+    if (runsGroup) runsGroup.style.display = 'block';
+    if (fielderGroup) fielderGroup.style.display = 'block';
+    if (fielderLabel) fielderLabel.textContent = 'Fielder (Throw / Direct Hit)';
+  } else if (type === 'Retired') {
+    if (headingEl) headingEl.textContent = 'Which Batter is Retiring?';
+    if (strikerCard) strikerCard.classList.remove('disabled');
+    if (nonStrikerCard) nonStrikerCard.classList.remove('disabled');
+    if (runsGroup) runsGroup.style.display = 'none';
+    if (fielderGroup) fielderGroup.style.display = 'none';
+    setWicketRuns(0);
+  } else {
+    // Bowled, Caught, LBW, Stumped, Hit Wicket, Caught Behind
+    // In cricket, only the striker can be dismissed this way
+    if (headingEl) headingEl.textContent = 'Batter Dismissed (Striker Facing)';
+    selectWicketBatter(0); // auto-select striker
+    if (strikerCard) strikerCard.classList.remove('disabled');
+    if (nonStrikerCard) nonStrikerCard.classList.add('disabled');
+    if (runsGroup) runsGroup.style.display = 'none';
+    setWicketRuns(0);
+
+    const needsFielder = (type === 'Caught' || type === 'Caught Behind' || type === 'Stumped');
+    if (fielderGroup) fielderGroup.style.display = needsFielder ? 'block' : 'none';
+    if (fielderLabel) fielderLabel.textContent = type === 'Stumped' ? 'Wicket-Keeper' : 'Fielder (Catch)';
+  }
 }
 window.selectDismissal = selectDismissal;
 
 function setWicketRuns(r) {
   wicketState.runs = r;
-  document.querySelectorAll('#wicket-runs-group button').forEach(b => {
+  document.querySelectorAll('#wicket-runs-selector button').forEach(b => {
     b.classList.toggle('selected', parseInt(b.textContent) === r);
   });
 }
@@ -2542,6 +2723,311 @@ function openPlayerProfile(playerName) {
 
 
 // ============================================================
+
+// ============================================================
+//  TEAMS MANAGEMENT (CREATE, SAVE, EDIT, DELETE)
+// ============================================================
+let _isTeamsFromSetup = false;
+let _currentEditingTeamId = null;
+
+function loadSavedTeams() {
+  const t = load(TEAMS_KEY);
+  if (Array.isArray(t) && t.length > 0) return t;
+  const defaults = [
+    {
+      id: 'team_kashmir',
+      name: 'Kashmir XI',
+      players: ['Ali Khan', 'Bilal Ahmed', 'Usman Tariq', 'Zain Malik', 'Hamza Farooq', 'Saad Rafiq', 'Irfan Pathan', 'Rashid Khan', 'Sohail Tanvir', 'Mohammad Amir', 'Babar Azam'],
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: 'team_dubai',
+      name: 'Dubai Stars',
+      players: ['David Warner', 'Steve Smith', 'Glenn Maxwell', 'Mitchell Starc', 'Pat Cummins', 'Adam Zampa', 'Travis Head', 'Josh Hazlewood', 'Marcus Stoinis', 'Matthew Wade', 'Nathan Lyon'],
+      createdAt: new Date().toISOString()
+    }
+  ];
+  save(TEAMS_KEY, defaults);
+  return defaults;
+}
+
+function saveSavedTeams(teams) {
+  save(TEAMS_KEY, teams);
+}
+
+function openTeamsModal(fromSetup = false) {
+  _isTeamsFromSetup = !!fromSetup;
+  renderSavedTeamsList();
+  openModal('teams-modal');
+}
+window.openTeamsModal = openTeamsModal;
+
+function closeTeamsModal() {
+  closeModal('teams-modal');
+  populateTeamDropdowns();
+}
+window.closeTeamsModal = closeTeamsModal;
+
+function renderSavedTeamsList() {
+  const teams = loadSavedTeams();
+  const searchInput = document.getElementById('teams-search-input');
+  const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+  const filtered = query
+    ? teams.filter(t => t.name.toLowerCase().includes(query) || (t.players && t.players.some(p => (typeof p === 'string' ? p : p.name).toLowerCase().includes(query))))
+    : teams;
+
+  const countEl = document.getElementById('teams-count-label');
+  if (countEl) countEl.textContent = `${teams.length} Team${teams.length === 1 ? '' : 's'} Saved`;
+
+  const listEl = document.getElementById('saved-teams-list');
+  if (!listEl) return;
+
+  if (filtered.length === 0) {
+    listEl.innerHTML = `
+      <div style="text-align:center;padding:28px 12px;color:var(--text-muted);font-size:13px">
+        ${query ? 'No teams match your search.' : 'No saved teams yet.<br>Tap <strong>+ Create Team</strong> to add your first team!'}
+      </div>
+    `;
+    return;
+  }
+
+  let html = '';
+  filtered.forEach(t => {
+    const pCount = (t.players || []).length;
+    const previewNames = (t.players || []).map(p => typeof p === 'string' ? p : p.name).slice(0, 5).join(', ');
+    const moreText = pCount > 5 ? ` +${pCount - 5} more` : '';
+
+    html += `
+      <div class="team-card-item">
+        <div class="team-card-header">
+          <div class="team-card-title">
+            <span>🛡️</span>
+            <span>${t.name}</span>
+          </div>
+          <span class="team-card-badge">${pCount} Players</span>
+        </div>
+        <div class="team-card-players-preview">
+          ${previewNames ? previewNames + moreText : 'No players added yet'}
+        </div>
+        <div class="team-card-actions">
+          <button class="btn btn-sm btn-secondary" onclick="openTeamEditorModal('${t.id}')" style="padding:4px 10px;font-size:12px">
+            ✏️ Edit
+          </button>
+          <button class="btn btn-sm btn-secondary" onclick="deleteSavedTeam('${t.id}')" style="padding:4px 8px;font-size:12px;color:var(--accent-red);border-color:rgba(255,82,82,0.3)" title="Delete Team">
+            🗑️
+          </button>
+        </div>
+      </div>
+    `;
+  });
+  listEl.innerHTML = html;
+}
+window.renderSavedTeamsList = renderSavedTeamsList;
+window.filterSavedTeamsList = renderSavedTeamsList;
+
+function openTeamEditorModal(teamId = null) {
+  _currentEditingTeamId = teamId;
+  const nameInput = document.getElementById('team-editor-name');
+  const idInput = document.getElementById('team-editor-id');
+  const titleEl = document.getElementById('team-editor-title');
+  const listEl = document.getElementById('team-editor-players-list');
+
+  if (listEl) listEl.innerHTML = '';
+
+  if (teamId) {
+    const teams = loadSavedTeams();
+    const target = teams.find(t => t.id === teamId);
+    if (target) {
+      if (titleEl) titleEl.textContent = 'Edit Team';
+      if (idInput) idInput.value = target.id;
+      if (nameInput) nameInput.value = target.name;
+      (target.players || []).forEach(p => {
+        addPlayerRowToTeamEditor(typeof p === 'string' ? p : p.name);
+      });
+    }
+  } else {
+    if (titleEl) titleEl.textContent = 'Create Team';
+    if (idInput) idInput.value = '';
+    if (nameInput) nameInput.value = '';
+    // Pre-create 11 slots
+    for (let i = 0; i < 11; i++) {
+      addPlayerRowToTeamEditor('');
+    }
+  }
+
+  updateTeamEditorCount();
+  openModal('team-editor-modal');
+  setTimeout(() => nameInput?.focus(), 150);
+}
+window.openTeamEditorModal = openTeamEditorModal;
+
+function addPlayerRowToTeamEditor(playerName = '') {
+  const listEl = document.getElementById('team-editor-players-list');
+  if (!listEl) return;
+  const currentRows = listEl.querySelectorAll('.team-editor-row').length;
+  const rowIdx = currentRows + 1;
+
+  const row = document.createElement('div');
+  row.className = 'team-editor-row';
+  row.innerHTML = `
+    <span class="row-num">${rowIdx}</span>
+    <input class="form-input team-player-input" type="text" placeholder="Player ${rowIdx} Name" value="${playerName ? playerName.replace(/"/g, '&quot;') : ''}" maxlength="25" style="flex:1;padding:6px 10px;font-size:13px" />
+    <button type="button" class="icon-btn" onclick="removePlayerRowFromTeamEditor(this)" style="width:26px;height:26px;font-size:11px;color:var(--accent-red)">✕</button>
+  `;
+  listEl.appendChild(row);
+  updateTeamEditorCount();
+}
+window.addPlayerRowToTeamEditor = addPlayerRowToTeamEditor;
+
+function removePlayerRowFromTeamEditor(btn) {
+  const row = btn.closest('.team-editor-row');
+  if (row) {
+    row.remove();
+    const listEl = document.getElementById('team-editor-players-list');
+    if (listEl) {
+      listEl.querySelectorAll('.team-editor-row').forEach((r, idx) => {
+        const numEl = r.querySelector('.row-num');
+        if (numEl) numEl.textContent = idx + 1;
+        const inp = r.querySelector('.team-player-input');
+        if (inp && !inp.value) inp.placeholder = `Player ${idx + 1} Name`;
+      });
+    }
+    updateTeamEditorCount();
+  }
+}
+window.removePlayerRowFromTeamEditor = removePlayerRowFromTeamEditor;
+
+function addRegisteredToTeamEditor() {
+  const regPlayers = loadRegisteredPlayers();
+  if (regPlayers.length === 0) {
+    showToast('ℹ️', 'No registered players found in directory');
+    return;
+  }
+  const listEl = document.getElementById('team-editor-players-list');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+  regPlayers.forEach(p => {
+    addPlayerRowToTeamEditor(p.name);
+  });
+  updateTeamEditorCount();
+  showToast('👥', `Added ${regPlayers.length} registered players`);
+}
+window.addRegisteredToTeamEditor = addRegisteredToTeamEditor;
+
+function updateTeamEditorCount() {
+  const listEl = document.getElementById('team-editor-players-list');
+  const label = document.getElementById('team-editor-players-label');
+  if (listEl && label) {
+    const count = listEl.querySelectorAll('.team-editor-row').length;
+    label.textContent = `Squad Players (${count})`;
+  }
+}
+
+function saveTeamFromEditor() {
+  const nameInput = document.getElementById('team-editor-name');
+  const idInput = document.getElementById('team-editor-id');
+  const name = nameInput ? nameInput.value.trim() : '';
+  const teamId = idInput ? idInput.value : '';
+
+  if (!name) {
+    showToast('⚠️', 'Please enter a team name');
+    nameInput?.focus();
+    return;
+  }
+
+  const inputs = document.querySelectorAll('#team-editor-players-list .team-player-input');
+  const players = [];
+  inputs.forEach((inp) => {
+    const val = inp.value.trim();
+    if (val) players.push(val);
+  });
+
+  const teams = loadSavedTeams();
+
+  if (teamId) {
+    const idx = teams.findIndex(t => t.id === teamId);
+    if (idx !== -1) {
+      teams[idx].name = name;
+      teams[idx].players = players;
+      teams[idx].updatedAt = new Date().toISOString();
+    }
+  } else {
+    const newTeam = {
+      id: 'team_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+      name: name,
+      players: players,
+      createdAt: new Date().toISOString()
+    };
+    teams.push(newTeam);
+  }
+
+  saveSavedTeams(teams);
+  closeModal('team-editor-modal');
+  renderSavedTeamsList();
+  populateTeamDropdowns();
+  showToast('🛡️', `Team "${name}" saved! (${players.length} players)`);
+}
+window.saveTeamFromEditor = saveTeamFromEditor;
+
+function deleteSavedTeam(teamId) {
+  let teams = loadSavedTeams();
+  const target = teams.find(t => t.id === teamId);
+  if (!confirm(`Delete team "${target?.name || ''}"?`)) return;
+
+  teams = teams.filter(t => t.id !== teamId);
+  saveSavedTeams(teams);
+  renderSavedTeamsList();
+  populateTeamDropdowns();
+  showToast('🗑️', 'Team deleted');
+}
+window.deleteSavedTeam = deleteSavedTeam;
+
+function populateTeamDropdowns() {
+  const teams = loadSavedTeams();
+  const t1Select = document.getElementById('team1-select');
+  const t2Select = document.getElementById('team2-select');
+  if (!t1Select || !t2Select) return;
+
+  const currentT1 = t1Select.value;
+  const currentT2 = t2Select.value;
+
+  let opts = '<option value="">— Select Saved Team or Custom —</option>';
+  teams.forEach(t => {
+    const pCount = (t.players || []).length;
+    opts += `<option value="${t.id}">🛡️ ${t.name} (${pCount} players)</option>`;
+  });
+  opts += '<option value="__custom__">✏️ Custom / New Team</option>';
+
+  t1Select.innerHTML = opts;
+  t2Select.innerHTML = opts;
+
+  if (currentT1) t1Select.value = currentT1;
+  if (currentT2) t2Select.value = currentT2;
+}
+window.populateTeamDropdowns = populateTeamDropdowns;
+
+function onTeamSelectChange(teamNum) {
+  const selectEl = document.getElementById(`team${teamNum}-select`);
+  const nameInput = document.getElementById(`team${teamNum}-name`);
+  if (!selectEl || !nameInput) return;
+
+  const val = selectEl.value;
+  if (!val || val === '__custom__') {
+    return;
+  }
+
+  const teams = loadSavedTeams();
+  const team = teams.find(t => t.id === val);
+  if (team) {
+    nameInput.value = team.name;
+    nameInput.classList.add('populated-flash');
+    setTimeout(() => nameInput.classList.remove('populated-flash'), 600);
+    showToast('🛡️', `Selected "${team.name}" (${(team.players || []).length} players)`);
+  }
+}
+window.onTeamSelectChange = onTeamSelectChange;
+
 //  DATA BACKUP & SYNC (IMPORT & EXPORT)
 // ============================================================
 let pendingImportData = null;
@@ -2549,16 +3035,19 @@ let pendingImportData = null;
 function exportAppData() {
   const matches = loadMatches();
   const players = loadRegisteredPlayers();
+  const teams   = loadSavedTeams();
 
   const backup = {
     app: 'My Crick',
-    version: '2.9.0',
+    version: '2.10.0',
     exportedAt: new Date().toISOString(),
     matchCount: matches.length,
     playerCount: players.length,
+    teamCount: teams.length,
     data: {
       matches: matches,
       players: players,
+      teams: teams,
       config: config
     }
   };
@@ -2597,13 +3086,16 @@ function handleImportFile(event) {
       let players = [];
       let importedConfig = null;
 
+      let teams = [];
       if (parsed.data) {
         matches = Array.isArray(parsed.data.matches) ? parsed.data.matches : [];
         players = Array.isArray(parsed.data.players) ? parsed.data.players : [];
+        teams   = Array.isArray(parsed.data.teams) ? parsed.data.teams : [];
         importedConfig = parsed.data.config;
       } else {
         matches = Array.isArray(parsed.matches) ? parsed.matches : [];
         players = Array.isArray(parsed.players) ? parsed.players : [];
+        teams   = Array.isArray(parsed.teams) ? parsed.teams : [];
         importedConfig = parsed.config;
       }
 
@@ -2616,6 +3108,7 @@ function handleImportFile(event) {
       pendingImportData = {
         matches: matches,
         players: players,
+        teams: teams,
         config: importedConfig,
         filename: file.name,
         exportedAt: parsed.exportedAt || null
@@ -2655,12 +3148,22 @@ function executeImport(mode) {
   if (mode === 'replace') {
     finalMatches = pendingImportData.matches;
     finalPlayers = pendingImportData.players;
+    if (pendingImportData.teams) {
+      saveSavedTeams(pendingImportData.teams);
+    }
     if (pendingImportData.config) {
       config = Object.assign({}, config, pendingImportData.config);
       save(CFG_KEY, config);
       applyConfig();
     }
   } else {
+    // Merge teams:
+    if (Array.isArray(pendingImportData.teams)) {
+      const currentTeams = loadSavedTeams();
+      const existingTeamNames = new Set(currentTeams.map(t => t.name.trim().toLowerCase()));
+      const newTeamsToAdd = pendingImportData.teams.filter(t => !existingTeamNames.has(t.name.trim().toLowerCase()));
+      saveSavedTeams(currentTeams.concat(newTeamsToAdd));
+    }
     // Merge mode:
     const existingMatchIds = new Set(currentMatches.map(function(m) {
       return m.id || (m.date + '_' + m.teams[0] + '_' + m.teams[1]);
@@ -2697,6 +3200,7 @@ function executeImport(mode) {
   renderHomeScreen();
   renderHistoryScreen();
   if (typeof renderPlayerStatsScreen === 'function') renderPlayerStatsScreen();
+  populateTeamDropdowns();
 }
 
 window.navigate       = navigate;
@@ -2725,6 +3229,20 @@ window.openPlayerProfile = openPlayerProfile;
 window.exportAppData = exportAppData;
 window.handleImportFile = handleImportFile;
 window.executeImport = executeImport;
+window.openTeamsModal = openTeamsModal;
+window.closeTeamsModal = closeTeamsModal;
+window.renderSavedTeamsList = renderSavedTeamsList;
+window.filterSavedTeamsList = filterSavedTeamsList;
+window.openTeamEditorModal = openTeamEditorModal;
+window.addPlayerRowToTeamEditor = addPlayerRowToTeamEditor;
+window.removePlayerRowFromTeamEditor = removePlayerRowFromTeamEditor;
+window.addRegisteredToTeamEditor = addRegisteredToTeamEditor;
+window.saveTeamFromEditor = saveTeamFromEditor;
+window.deleteSavedTeam = deleteSavedTeam;
+window.populateTeamDropdowns = populateTeamDropdowns;
+window.onTeamSelectChange = onTeamSelectChange;
+window.saveLineupAsTeam = saveLineupAsTeam;
+window.selectWicketBatter = selectWicketBatter;
 
 window.renderPlayerStatsScreen = renderPlayerStatsScreen;
 

@@ -1449,3 +1449,118 @@ body::before {
   text-transform: uppercase;
   font-weight: 600;
 }
+
+/* ============================================================
+   TEAMS MANAGEMENT & RUN-OUT STYLES
+   ============================================================ */
+.team-card-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: var(--transition);
+}
+.team-card-item:hover {
+  border-color: var(--border-accent);
+}
+.team-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.team-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.team-card-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(0, 230, 118, 0.12);
+  color: var(--accent-green);
+  border: 1px solid rgba(0, 230, 118, 0.3);
+}
+.team-card-players-preview {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.team-card-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* Team editor player row */
+.team-editor-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+}
+.team-editor-row .row-num {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  min-width: 20px;
+  text-align: center;
+}
+
+/* Run-out batter selection cards */
+.runout-batter-card {
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 10px;
+  cursor: pointer;
+  transition: var(--transition);
+  text-align: center;
+  user-select: none;
+}
+.runout-batter-card:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+.runout-batter-card.selected {
+  border-color: var(--accent-gold) !important;
+  background: rgba(255, 215, 0, 0.08) !important;
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.2);
+}
+.runout-batter-card.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.runout-batter-card .ro-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+.runout-batter-card .ro-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.runout-batter-card .ro-stats {
+  font-size: 11px;
+  color: var(--text-muted);
+}
