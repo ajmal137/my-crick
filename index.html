@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="styles.css?v=2.10" />
+  <link rel="stylesheet" href="styles.css?v=2.11" />
 </head>
 <body>
 
@@ -798,12 +798,15 @@
     </div>
 
     <!-- Players Header & Quick Add -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
       <span class="form-label" style="margin:0" id="team-editor-players-label">Squad Players (0)</span>
       <div style="display:flex;gap:6px">
         <button type="button" class="btn btn-sm btn-secondary" onclick="addRegisteredToTeamEditor()" style="padding:3px 8px;font-size:11px" title="Import all registered players">+ All Registered</button>
         <button type="button" class="btn btn-sm btn-primary" onclick="addPlayerRowToTeamEditor()" style="padding:3px 8px;font-size:11px">+ Add Player</button>
       </div>
+    </div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">
+      Pick from registered players dropdown or type custom names:
     </div>
 
     <!-- Squad Players List -->
@@ -822,6 +825,6 @@
 <div id="toast-container"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="app.js?v=2.10"></script>
+<script src="app.js?v=2.11"></script>
 </body>
 </html>

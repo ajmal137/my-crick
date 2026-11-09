@@ -1503,16 +1503,24 @@ body::before {
 }
 
 /* Team editor player row */
-.team-editor-row {
+.team-editor-row,
+.team-editor-slot-card {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(255, 255, 255, 0.02);
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 6px 8px;
+  padding: 8px 10px;
+  transition: border-color 0.2s ease, background 0.2s ease;
 }
-.team-editor-row .row-num {
+.team-editor-row:focus-within,
+.team-editor-slot-card:focus-within {
+  border-color: var(--border-accent);
+  background: rgba(0, 230, 118, 0.03);
+}
+.team-editor-row .row-num,
+.team-editor-slot-card .row-num {
   font-size: 12px;
   font-weight: 700;
   color: var(--text-muted);

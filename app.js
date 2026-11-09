@@ -2865,28 +2865,57 @@ window.openTeamEditorModal = openTeamEditorModal;
 function addPlayerRowToTeamEditor(playerName = '') {
   const listEl = document.getElementById('team-editor-players-list');
   if (!listEl) return;
-  const currentRows = listEl.querySelectorAll('.team-editor-row').length;
+  const currentRows = listEl.querySelectorAll('.team-editor-slot-card, .team-editor-row').length;
   const rowIdx = currentRows + 1;
 
-  const row = document.createElement('div');
-  row.className = 'team-editor-row';
-  row.innerHTML = `
-    <span class="row-num">${rowIdx}</span>
-    <input class="form-input team-player-input" type="text" placeholder="Player ${rowIdx} Name" value="${playerName ? playerName.replace(/"/g, '&quot;') : ''}" maxlength="25" style="flex:1;padding:6px 10px;font-size:13px" />
-    <button type="button" class="icon-btn" onclick="removePlayerRowFromTeamEditor(this)" style="width:26px;height:26px;font-size:11px;color:var(--accent-red)">✕</button>
+  const regPlayers = loadRegisteredPlayers();
+  let optionsHtml = `<option value="">-- Choose from Registered (${regPlayers.length}) --</option>`;
+  regPlayers.forEach(p => {
+    const roleIcon = p.role === 'Batsman' ? '🏏' : p.role === 'Bowler' ? '🎳' : p.role === 'Wicket-Keeper' ? '🧤' : '⚡';
+    const isMatch = playerName && (playerName.trim().toLowerCase() === p.name.trim().toLowerCase());
+    optionsHtml += `<option value="${p.name.replace(/"/g, '&quot;')}" ${isMatch ? 'selected' : ''}>${roleIcon} ${p.name} (${p.role || 'Player'})</option>`;
+  });
+
+  const card = document.createElement('div');
+  card.className = 'team-editor-slot-card';
+  const escapedName = playerName ? playerName.replace(/"/g, '&quot;') : '';
+
+  card.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="row-num">${rowIdx}</span>
+      <select class="form-select team-player-dropdown" onchange="onTeamEditorPlayerDropdownChange(this)" style="flex:1;padding:6px 8px;font-size:12px">
+        ${optionsHtml}
+      </select>
+      <button type="button" class="icon-btn" onclick="removePlayerRowFromTeamEditor(this)" style="width:28px;height:28px;font-size:11px;color:var(--accent-red);border-color:rgba(255,82,82,0.3)" title="Remove player slot">✕</button>
+    </div>
+    <input class="form-input team-player-input" type="text" placeholder="Player ${rowIdx} Name" value="${escapedName}" maxlength="25" style="padding:6px 10px;font-size:13px" />
   `;
-  listEl.appendChild(row);
+  listEl.appendChild(card);
   updateTeamEditorCount();
 }
 window.addPlayerRowToTeamEditor = addPlayerRowToTeamEditor;
 
+function onTeamEditorPlayerDropdownChange(selectEl) {
+  const card = selectEl.closest('.team-editor-slot-card') || selectEl.closest('.team-editor-row');
+  if (!card) return;
+  const inputEl = card.querySelector('.team-player-input');
+  if (!inputEl) return;
+  const val = selectEl.value;
+  if (val) {
+    inputEl.value = val;
+    inputEl.classList.add('populated-flash');
+    setTimeout(() => inputEl.classList.remove('populated-flash'), 600);
+  }
+}
+window.onTeamEditorPlayerDropdownChange = onTeamEditorPlayerDropdownChange;
+
 function removePlayerRowFromTeamEditor(btn) {
-  const row = btn.closest('.team-editor-row');
+  const row = btn.closest('.team-editor-slot-card') || btn.closest('.team-editor-row');
   if (row) {
     row.remove();
     const listEl = document.getElementById('team-editor-players-list');
     if (listEl) {
-      listEl.querySelectorAll('.team-editor-row').forEach((r, idx) => {
+      listEl.querySelectorAll('.team-editor-slot-card, .team-editor-row').forEach((r, idx) => {
         const numEl = r.querySelector('.row-num');
         if (numEl) numEl.textContent = idx + 1;
         const inp = r.querySelector('.team-player-input');
@@ -2919,7 +2948,7 @@ function updateTeamEditorCount() {
   const listEl = document.getElementById('team-editor-players-list');
   const label = document.getElementById('team-editor-players-label');
   if (listEl && label) {
-    const count = listEl.querySelectorAll('.team-editor-row').length;
+    const count = listEl.querySelectorAll('.team-editor-slot-card, .team-editor-row').length;
     label.textContent = `Squad Players (${count})`;
   }
 }
